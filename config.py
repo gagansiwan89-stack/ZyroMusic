@@ -46,12 +46,6 @@ GIT_TOKEN = getenv(
     "GIT_TOKEN", None
 ) 
 # ----------------------------------------------------------------
-API_URL = getenv("API_URL", 'https://api.nexgenbots.xyz') #youtube song url
-VIDEO_API_URL = getenv("VIDEO_API_URL", 'https://api.video.nexgenbots.xyz')
-API_KEY = getenv("API_KEY", "") # youtube song api key, generate free key or buy paid plan from https://console.nexgenbots.xyz
-
-API2_URL = getenv("API2_URL", "https://shrutibots.site")
-
 YTPROXY_URL = getenv("YTPROXY_URL", 'https://tgapi.xbitcode.com') ## xBit Music Endpoint.
 YT_API_KEY = getenv("YT_API_KEY" , "" ) ## Your API key like: xbit_10000000xx0233 Get from  https://t.me/tgmusic_apibot
 
