@@ -7,11 +7,11 @@ def song_markup(_, vidid):
         [
             InlineKeyboardButton(
                 text=_["SG_B_2"],
-                callback_data=f"song_helper audio|{vidid}",
+                callback_data=f"song_download audio|default|{vidid}",
             ),
             InlineKeyboardButton(
                 text=_["SG_B_3"],
-                callback_data=f"song_helper video|{vidid}",
+                callback_data=f"song_download video|default|{vidid}",
             ),
         ],
         [
