@@ -6,13 +6,13 @@ import os
 import random
 import re
 from typing import Union
-import yt_dlp
+
 from pyrogram.enums import MessageEntityType
 from pyrogram.types import Message
 from LoverCodes import LOGGER
 from LoverCodes.utils.database import is_on_off
 from LoverCodes.utils.formatters import time_to_seconds
-from config import API_URL, VIDEO_API_URL, API_KEY, API2_URL, YT_API_KEY as XBIT_API_KEY, YTPROXY_URL as YTPROXY
+from config import YT_API_KEY as XBIT_API_KEY, YTPROXY_URL as YTPROXY
 
 logger = LOGGER(__name__)
 
@@ -61,52 +61,9 @@ async def download_xbit(video_id: str, file_type: str = "audio"):
         logger.error(f"XBit Download error: {e}")
         return None
 
-async def download_api2(video_id: str, file_type: str = "audio"):
-    ext = "mp4" if file_type == "video" else "mp3"
-    file_path = os.path.join("downloads", f"{video_id}.{ext}")
-    if os.path.exists(file_path):
-        return file_path
-
-    session = get_session()
-    try:
-        async with session.get(
-            f"{API2_URL}/download",
-            params={"url": video_id, "type": file_type},
-            timeout=aiohttp.ClientTimeout(total=10)
-        ) as resp:
-            if resp.status != 200:
-                return None
-            data = await resp.json()
-            token = data.get("download_token")
-            if not token:
-                return None
-
-        stream_url = f"{API2_URL}/stream/{video_id}?type={file_type}&token={token}"
-        async with session.get(stream_url) as audio_resp:
-            if audio_resp.status == 302:
-                redirect = audio_resp.headers.get("Location")
-                if not redirect:
-                    return None
-                async with session.get(redirect) as final_resp:
-                    if final_resp.status != 200:
-                        return None
-                    with open(file_path, "wb") as f:
-                        async for chunk in final_resp.content.iter_chunked(1048576):
-                            f.write(chunk)
-            elif audio_resp.status == 200:
-                with open(file_path, "wb") as f:
-                    async for chunk in audio_resp.content.iter_chunked(1048576):
-                        f.write(chunk)
-            else:
-                return None
-        return file_path
-    except Exception:
-        return None
-
 async def download_song(link: str):
     video_id = link.split('v=')[-1].split('&')[0]
     download_folder = "downloads"
-    file_path = None
     for ext in ["mp3", "m4a", "webm"]:
         file_path = f"{download_folder}/{video_id}.{ext}"
         if os.path.exists(file_path):
@@ -117,38 +74,11 @@ async def download_song(link: str):
     if xbit_path:
         return xbit_path
 
-    # Try API 1 (NexGen)
-    song_url = f"{API_URL}/song/{video_id}?api={API_KEY}"
-    session = get_session()
-    for attempt in range(5):
-        try:
-            async with session.get(song_url, timeout=10) as response:
-                if response.status != 200:
-                    break
-                data = await response.json()
-                status = data.get("status", "").lower()
-                if status == "done":
-                    download_url = data.get("link")
-                    file_name = f"{video_id}.mp3"
-                    os.makedirs(download_folder, exist_ok=True)
-                    file_path = os.path.join(download_folder, file_name)
-                    async with session.get(download_url) as file_response:
-                        with open(file_path, 'wb') as f:
-                            async for chunk in file_response.content.iter_chunked(1048576):
-                                f.write(chunk)
-                        return file_path
-                elif status == "downloading":
-                    await asyncio.sleep(2)
-                else: break
-        except: break
-    
-    # Fallback to API 2 (Shruti)
-    return await download_api2(video_id, "audio")
+    return None
 
 async def download_video_api(link: str):
     video_id = link.split('v=')[-1].split('&')[0]
     download_folder = "downloads"
-    file_path = None
     for ext in ["mp4", "webm", "mkv"]:
         file_path = f"{download_folder}/{video_id}.{ext}"
         if os.path.exists(file_path):
@@ -159,32 +89,7 @@ async def download_video_api(link: str):
     if xbit_path:
         return xbit_path
 
-    video_url = f"{VIDEO_API_URL}/video/{video_id}?api={API_KEY}"
-    session = get_session()
-    for attempt in range(5):
-        try:
-            async with session.get(video_url, timeout=10) as response:
-                if response.status != 200:
-                    break
-                data = await response.json()
-                status = data.get("status", "").lower()
-                if status == "done":
-                    download_url = data.get("link")
-                    file_name = f"{video_id}.mp4"
-                    os.makedirs(download_folder, exist_ok=True)
-                    file_path = os.path.join(download_folder, file_name)
-                    async with session.get(download_url) as file_response:
-                        with open(file_path, 'wb') as f:
-                            async for chunk in file_response.content.iter_chunked(1048576):
-                                f.write(chunk)
-                        return file_path
-                elif status == "downloading":
-                    await asyncio.sleep(2)
-                else: break
-        except: break
-                
-    # Fallback to API 2
-    return await download_api2(video_id, "video")
+    return None
 
 
 class YouTubeAPI:
@@ -316,21 +221,7 @@ class YouTubeAPI:
         except Exception:
             pass
         
-        # Original fallback
-        proc = await asyncio.create_subprocess_exec(
-            "yt-dlp",
-            "-g",
-            "-f",
-            "best[height<=?720][width<=?1280]",
-            f"{link}",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await proc.communicate()
-        if stdout:
-            return 1, stdout.decode().split("\n")[0]
-        else:
-            return 0, stderr.decode()
+        return 0, "Failed to download video"
 
     async def playlist(self, link, limit, user_id, videoid: Union[bool, str] = None):
         if videoid:
@@ -386,40 +277,7 @@ class YouTubeAPI:
         return track_details, vidid
 
     async def formats(self, link: str, videoid: Union[bool, str] = None):
-        if videoid:
-            link = self.base + link
-        if "&" in link:
-            link = link.split("&")[0]
-        ytdl_opts = {"quiet": True}
-        ydl = yt_dlp.YoutubeDL(ytdl_opts)
-        with ydl:
-            formats_available = []
-            r = ydl.extract_info(link, download=False)
-            for format in r["formats"]:
-                try:
-                    str(format["format"])
-                except:
-                    continue
-                if not "dash" in str(format["format"]).lower():
-                    try:
-                        format["format"]
-                        format["filesize"]
-                        format["format_id"]
-                        format["ext"]
-                        format["format_note"]
-                    except:
-                        continue
-                    formats_available.append(
-                        {
-                            "format": format["format"],
-                            "filesize": format["filesize"],
-                            "format_id": format["format_id"],
-                            "ext": format["ext"],
-                            "format_note": format["format_note"],
-                            "yturl": link,
-                        }
-                    )
-        return formats_available, link
+        return [], link
 
     async def slider(self, link: str, query_type: int, videoid: Union[bool, str] = None):
         if videoid:
@@ -479,10 +337,10 @@ class YouTubeAPI:
         if songvideo or video:
             fpath = await download_video_api(link)
             if fpath:
-                return fpath, True
+                return fpath
             raise Exception("Failed to download video file via APIs")
         else:
             fpath = await download_song(link)
             if fpath:
-                return fpath, True
+                return fpath
             raise Exception("Failed to download audio file via APIs")
